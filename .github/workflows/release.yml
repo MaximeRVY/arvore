@@ -65,3 +65,55 @@ jobs:
         with:
           generate_release_notes: true
           files: arvore-*.tar.gz
+
+  update-tap:
+    name: Update Homebrew tap
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download source tarball and compute SHA256
+        id: sha
+        run: |
+          curl -sL "https://github.com/MaximeRVY/arvore/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" -o source.tar.gz
+          echo "sha256=$(sha256sum source.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: MaximeRVY/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Write formula
+        run: |
+          mkdir -p Formula
+          cat > Formula/arvore.rb << EOF
+          class Arvore < Formula
+            desc "A fast git worktree manager"
+            homepage "https://github.com/MaximeRVY/arvore"
+            url "https://github.com/MaximeRVY/arvore/archive/refs/tags/v${{ steps.version.outputs.version }}.tar.gz"
+            sha256 "${{ steps.sha.outputs.sha256 }}"
+            license "MIT"
+
+            depends_on "rust" => :build
+
+            def install
+              system "cargo", "install", *std_cargo_args
+            end
+
+            test do
+              assert_match "arvore", shell_output("#{bin}/arvore --version")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Formula/arvore.rb
+          git diff --cached --quiet || git commit -m "Update arvore to ${{ steps.version.outputs.version }}"
+          git push
