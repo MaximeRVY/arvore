@@ -71,3 +71,100 @@ fn expand_tilde(path: &str) -> PathBuf {
     }
     PathBuf::from(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_tilde_with_subpath() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(expand_tilde("~/foo"), home.join("foo"));
+    }
+
+    #[test]
+    fn expand_tilde_alone() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(expand_tilde("~"), home);
+    }
+
+    #[test]
+    fn expand_tilde_absolute_unchanged() {
+        assert_eq!(expand_tilde("/absolute/path"), PathBuf::from("/absolute/path"));
+    }
+
+    #[test]
+    fn expand_tilde_relative_unchanged() {
+        assert_eq!(expand_tilde("relative/path"), PathBuf::from("relative/path"));
+    }
+
+    #[test]
+    fn worktree_path_simple_branch() {
+        let config = Config {
+            worktree_base: PathBuf::from("/base"),
+        };
+        assert_eq!(
+            config.worktree_path("myrepo", "feature"),
+            PathBuf::from("/base/myrepo/feature")
+        );
+    }
+
+    #[test]
+    fn worktree_path_slash_in_branch() {
+        let config = Config {
+            worktree_base: PathBuf::from("/base"),
+        };
+        assert_eq!(
+            config.worktree_path("myrepo", "feature/auth"),
+            PathBuf::from("/base/myrepo/feature-auth")
+        );
+    }
+
+    #[test]
+    fn worktree_path_multiple_slashes() {
+        let config = Config {
+            worktree_base: PathBuf::from("/base"),
+        };
+        assert_eq!(
+            config.worktree_path("myrepo", "feat/sub/deep"),
+            PathBuf::from("/base/myrepo/feat-sub-deep")
+        );
+    }
+
+    #[test]
+    fn load_missing_file_returns_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("nonexistent.yaml");
+        let config = Config::load(Some(&config_path)).unwrap();
+        let default = Config::default();
+        assert_eq!(config.worktree_base, default.worktree_base);
+    }
+
+    #[test]
+    fn load_valid_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.yaml");
+        std::fs::write(&config_path, "worktree_base: /tmp/my-worktrees\n").unwrap();
+        let config = Config::load(Some(&config_path)).unwrap();
+        assert_eq!(config.worktree_base, PathBuf::from("/tmp/my-worktrees"));
+    }
+
+    #[test]
+    fn load_yaml_without_worktree_base_uses_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.yaml");
+        std::fs::write(&config_path, "other_key: value\n").unwrap();
+        let config = Config::load(Some(&config_path)).unwrap();
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(config.worktree_base, home.join("Dev/worktrees"));
+    }
+
+    #[test]
+    fn load_invalid_yaml_returns_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.yaml");
+        std::fs::write(&config_path, "worktree_base: [invalid\n").unwrap();
+        let result = Config::load(Some(&config_path));
+        assert!(result.is_err());
+    }
+}

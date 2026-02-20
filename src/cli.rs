@@ -81,3 +81,157 @@ impl From<ShellType> for clap_complete::Shell {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parse_create_basic() {
+        let cli = Cli::try_parse_from(["arvore", "create", "my-branch"]).unwrap();
+        match cli.command {
+            Commands::Create { branch, from, open } => {
+                assert_eq!(branch, "my-branch");
+                assert!(from.is_none());
+                assert!(!open);
+            }
+            _ => panic!("expected Create"),
+        }
+    }
+
+    #[test]
+    fn parse_create_with_from() {
+        let cli = Cli::try_parse_from(["arvore", "create", "my-branch", "--from", "main"]).unwrap();
+        match cli.command {
+            Commands::Create { from, .. } => assert_eq!(from.as_deref(), Some("main")),
+            _ => panic!("expected Create"),
+        }
+    }
+
+    #[test]
+    fn parse_create_with_open() {
+        let cli = Cli::try_parse_from(["arvore", "create", "my-branch", "--open"]).unwrap();
+        match cli.command {
+            Commands::Create { open, .. } => assert!(open),
+            _ => panic!("expected Create"),
+        }
+    }
+
+    #[test]
+    fn parse_list() {
+        let cli = Cli::try_parse_from(["arvore", "ls"]).unwrap();
+        match cli.command {
+            Commands::List { porcelain } => assert!(!porcelain),
+            _ => panic!("expected List"),
+        }
+    }
+
+    #[test]
+    fn parse_list_porcelain() {
+        let cli = Cli::try_parse_from(["arvore", "ls", "--porcelain"]).unwrap();
+        match cli.command {
+            Commands::List { porcelain } => assert!(porcelain),
+            _ => panic!("expected List"),
+        }
+    }
+
+    #[test]
+    fn parse_remove() {
+        let cli = Cli::try_parse_from(["arvore", "rm", "my-branch"]).unwrap();
+        match cli.command {
+            Commands::Remove { target, force } => {
+                assert_eq!(target, "my-branch");
+                assert!(!force);
+            }
+            _ => panic!("expected Remove"),
+        }
+    }
+
+    #[test]
+    fn parse_remove_force() {
+        let cli = Cli::try_parse_from(["arvore", "rm", "my-branch", "--force"]).unwrap();
+        match cli.command {
+            Commands::Remove { force, .. } => assert!(force),
+            _ => panic!("expected Remove"),
+        }
+    }
+
+    #[test]
+    fn parse_open_cursor() {
+        let cli = Cli::try_parse_from(["arvore", "open", "my-branch", "--cursor"]).unwrap();
+        match cli.command {
+            Commands::Open {
+                branch,
+                cursor,
+                all,
+                ..
+            } => {
+                assert_eq!(branch, "my-branch");
+                assert!(cursor);
+                assert!(!all);
+            }
+            _ => panic!("expected Open"),
+        }
+    }
+
+    #[test]
+    fn parse_open_all() {
+        let cli = Cli::try_parse_from(["arvore", "open", "my-branch", "--all"]).unwrap();
+        match cli.command {
+            Commands::Open { all, .. } => assert!(all),
+            _ => panic!("expected Open"),
+        }
+    }
+
+    #[test]
+    fn parse_path() {
+        let cli = Cli::try_parse_from(["arvore", "path", "my-branch"]).unwrap();
+        match cli.command {
+            Commands::Path { branch } => assert_eq!(branch, "my-branch"),
+            _ => panic!("expected Path"),
+        }
+    }
+
+    #[test]
+    fn parse_clean() {
+        let cli = Cli::try_parse_from(["arvore", "clean"]).unwrap();
+        match cli.command {
+            Commands::Clean { dry_run } => assert!(!dry_run),
+            _ => panic!("expected Clean"),
+        }
+    }
+
+    #[test]
+    fn parse_clean_dry_run() {
+        let cli = Cli::try_parse_from(["arvore", "clean", "--dry-run"]).unwrap();
+        match cli.command {
+            Commands::Clean { dry_run } => assert!(dry_run),
+            _ => panic!("expected Clean"),
+        }
+    }
+
+    #[test]
+    fn parse_completions_zsh() {
+        let cli = Cli::try_parse_from(["arvore", "completions", "zsh"]).unwrap();
+        match cli.command {
+            Commands::Completions { shell } => {
+                let s: clap_complete::Shell = shell.into();
+                assert_eq!(s, clap_complete::Shell::Zsh);
+            }
+            _ => panic!("expected Completions"),
+        }
+    }
+
+    #[test]
+    fn parse_global_config_flag() {
+        let cli = Cli::try_parse_from(["arvore", "--config", "/custom/path", "ls"]).unwrap();
+        assert_eq!(cli.config, Some(std::path::PathBuf::from("/custom/path")));
+    }
+
+    #[test]
+    fn parse_missing_subcommand_errors() {
+        let result = Cli::try_parse_from(["arvore"]);
+        assert!(result.is_err());
+    }
+}

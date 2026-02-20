@@ -11,3 +11,46 @@ pub enum ArvoreError {
     #[error("config error: {0}")]
     ConfigError(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_not_a_repo() {
+        assert_eq!(
+            ArvoreError::NotARepo.to_string(),
+            "not inside a git repository"
+        );
+    }
+
+    #[test]
+    fn display_worktree_not_found() {
+        assert_eq!(
+            ArvoreError::WorktreeNotFound("foo".into()).to_string(),
+            "worktree 'foo' not found"
+        );
+    }
+
+    #[test]
+    fn display_dirty_worktree_contains_force() {
+        let msg = ArvoreError::DirtyWorktree("bar".into()).to_string();
+        assert!(msg.contains("--force"), "expected --force in: {msg}");
+    }
+
+    #[test]
+    fn display_git_error() {
+        assert_eq!(
+            ArvoreError::GitError("something".into()).to_string(),
+            "git command failed: something"
+        );
+    }
+
+    #[test]
+    fn display_config_error() {
+        assert_eq!(
+            ArvoreError::ConfigError("bad".into()).to_string(),
+            "config error: bad"
+        );
+    }
+}

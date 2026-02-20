@@ -65,15 +65,14 @@ pub fn is_inside_worktree() -> Result<bool> {
     }
 }
 
-pub fn worktree_list() -> Result<Vec<WorktreeInfo>> {
-    let out = run_git(&["worktree", "list", "--porcelain"])?;
+pub fn parse_worktree_porcelain(output: &str) -> Vec<WorktreeInfo> {
     let mut worktrees = Vec::new();
     let mut path: Option<PathBuf> = None;
     let mut head = String::new();
     let mut branch: Option<String> = None;
     let mut is_bare = false;
 
-    for line in out.lines() {
+    for line in output.lines() {
         if line.is_empty() {
             if let Some(p) = path.take() {
                 worktrees.push(WorktreeInfo {
@@ -108,7 +107,12 @@ pub fn worktree_list() -> Result<Vec<WorktreeInfo>> {
         });
     }
 
-    Ok(worktrees)
+    worktrees
+}
+
+pub fn worktree_list() -> Result<Vec<WorktreeInfo>> {
+    let out = run_git(&["worktree", "list", "--porcelain"])?;
+    Ok(parse_worktree_porcelain(&out))
 }
 
 pub fn worktree_add(
@@ -215,5 +219,93 @@ pub fn branch_exists_locally(branch: &str) -> Result<bool> {
     match run_git(&["rev-parse", "--verify", &format!("refs/heads/{branch}")]) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_single_worktree() {
+        let output = "\
+worktree /path/to/repo
+HEAD abc123def456
+branch refs/heads/main
+
+";
+        let wts = parse_worktree_porcelain(output);
+        assert_eq!(wts.len(), 1);
+        assert_eq!(wts[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(wts[0].head, "abc123def456");
+        assert_eq!(wts[0].branch.as_deref(), Some("main"));
+        assert!(!wts[0].is_bare);
+    }
+
+    #[test]
+    fn parse_multiple_worktrees() {
+        let output = "\
+worktree /path/to/repo
+HEAD abc123def456
+branch refs/heads/main
+
+worktree /path/to/wt1
+HEAD def456abc789
+branch refs/heads/feature-x
+
+";
+        let wts = parse_worktree_porcelain(output);
+        assert_eq!(wts.len(), 2);
+        assert_eq!(wts[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(wts[0].branch.as_deref(), Some("main"));
+        assert_eq!(wts[1].path, PathBuf::from("/path/to/wt1"));
+        assert_eq!(wts[1].head, "def456abc789");
+        assert_eq!(wts[1].branch.as_deref(), Some("feature-x"));
+    }
+
+    #[test]
+    fn parse_bare_worktree() {
+        let output = "\
+worktree /path/to/repo
+HEAD abc123def456
+bare
+
+";
+        let wts = parse_worktree_porcelain(output);
+        assert_eq!(wts.len(), 1);
+        assert!(wts[0].is_bare);
+        assert!(wts[0].branch.is_none());
+    }
+
+    #[test]
+    fn parse_detached_head() {
+        let output = "\
+worktree /path/to/repo
+HEAD abc123def456
+detached
+
+";
+        let wts = parse_worktree_porcelain(output);
+        assert_eq!(wts.len(), 1);
+        assert!(wts[0].branch.is_none());
+        assert!(!wts[0].is_bare);
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let wts = parse_worktree_porcelain("");
+        assert!(wts.is_empty());
+    }
+
+    #[test]
+    fn parse_no_trailing_newline() {
+        let output = "\
+worktree /path/to/repo
+HEAD abc123def456
+branch refs/heads/main";
+        let wts = parse_worktree_porcelain(output);
+        assert_eq!(wts.len(), 1);
+        assert_eq!(wts[0].path, PathBuf::from("/path/to/repo"));
+        assert_eq!(wts[0].branch.as_deref(), Some("main"));
     }
 }
