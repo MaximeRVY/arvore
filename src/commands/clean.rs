@@ -101,7 +101,7 @@ pub fn run(dry_run: bool) -> Result<()> {
     println!();
 
     if dry_run {
-        println!("{}", "Dry run — no worktrees removed.".cyan());
+        println!("{}", "Dry run - no worktrees removed.".cyan());
         return Ok(());
     }
 

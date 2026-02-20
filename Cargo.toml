@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A fast git worktree manager"
 license = "MIT"
-repository = "https://github.com/maxraverdy/arvore"
+repository = "https://github.com/MaximeRVY/arvore"
 
 [dependencies]
 anyhow = "1"
